@@ -6,6 +6,9 @@
     align-items: center;
     margin: 2rem;
 }
+.wrapper{
+    width: 90vw !important;
+}
 .charts-wrapper{
     justify-content: space-between;
     height:  auto;
