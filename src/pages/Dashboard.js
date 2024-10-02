@@ -9,6 +9,9 @@ import {addDoc , collection, query, getDocs} from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import moment from 'moment'; //it's a moment package (npm i moment)
+import TransactionsTable from '../components/TransactionsTable';
+import ChartComponent from '../components/Charts';
+import NoTransaction from '../components/NoTransaction';
 
 function Dashboard() {
   // data add in doc in firebase this type
@@ -31,9 +34,15 @@ function Dashboard() {
   // ];
   const [loading,setLoading] = useState(false);
   const [transactions, setTransactions] = useState([]);
+
   const [user] = useAuthState(auth);
+
   const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
   const [ isIncomeModalVisible, setIsIncomeModalVisible] = useState(false);
+
+  const [income,setIncome] = useState(0);
+  const [expense, setExpense] = useState(0);
+  const [totalBalance, setTotalBalance] = useState(0);
 
   const showExpenseModal = () =>{
     setIsExpenseModalVisible(true);
@@ -50,7 +59,7 @@ function Dashboard() {
   const onFinish = (values, type) => {
     const newTransaction = {
       type: type,
-      date: moment(values.date).format("YYYY-MM-DD"),
+      date: values.date.format("YYYY-MM-DD"),
       amount: parseFloat(values.amount),
       tag: values.tag,
       name: values.name,
@@ -58,22 +67,50 @@ function Dashboard() {
     addTransaction(newTransaction);
   }
 
-   async function addTransaction(transaction){
+   async function addTransaction(transaction, many){
     try {
       const docRef = await addDoc(
-        collection(db,`users/${user.uid}/transactions`), transaction
-      );
+        collection(db,`users/${user.uid}/transactions`), transaction);
+     
       console.log("Document written with Id: ",docRef.id);
-      toast.success("Transaction Added!");
+      if(!many) toast.success("Transaction Added!");
+      // update transaction
+      let newArray = transactions;
+      newArray.push(transaction);
+      setTransactions(newArray);
+      calculateBalance();
     } catch (e) {
       console.log("Error adding document",e);
-      toast.error("couldn't add transaction");
+      if(!many) toast.error("couldn't add transaction");
     }
   }
   useEffect(() => {
     // get all doc from a collection
     fetchTransactions();
-  }, []);
+  }, [user]);
+
+  useEffect(() => {
+    calculateBalance();
+  }, [transactions]);
+
+  const calculateBalance = () => {
+    let incomeTotal = 0;
+    let expensesTotal = 0;
+
+    transactions.forEach((transaction) => {
+      if (transaction.type === "income") {
+        incomeTotal += transaction.amount;
+      } else {
+        expensesTotal += transaction.amount;
+      }
+    });
+
+    setIncome(incomeTotal);
+    setExpense(expensesTotal);
+    setTotalBalance(incomeTotal - expensesTotal);
+  };
+
+
 // fetch data function
   async function fetchTransactions(){
     setLoading(true);
@@ -91,7 +128,10 @@ function Dashboard() {
     }
     setLoading(false);
   }
-  
+  //for chart
+  let sortedTransaction = transactions.sort((a,b) =>{
+    return new Date(a.date) - new Date(b.date)
+  })
   return (
     <div>
       <Header />
@@ -100,10 +140,15 @@ function Dashboard() {
         : 
         (<>
         <Cards 
+          income={income}
+          expense={expense}
+          totalBalance = {totalBalance}
+
           showExpenseModal = {showExpenseModal}
           showIncomeModal ={showIncomeModal}
         />
-
+        {/* chart page add */}
+        {transactions && transactions.length != 0 ? <ChartComponent sortedTransaction={sortedTransaction}/> :<NoTransaction/>}
         <AddIncomeModal
           isIncomeModalVisible = {isIncomeModalVisible}
           handleIncomeCancel = {handleIncomeCancel}
@@ -113,6 +158,11 @@ function Dashboard() {
           isExpenseModalVisible = {isExpenseModalVisible}
           handleExpenseCancel = {handleExpenseCancel}
           onFinish={onFinish}
+        />
+        <TransactionsTable 
+          transactions = {transactions}
+          addTransaction={ addTransaction} 
+          fetchTransactions = {fetchTransactions}
         />
         </>)}
     </div>
